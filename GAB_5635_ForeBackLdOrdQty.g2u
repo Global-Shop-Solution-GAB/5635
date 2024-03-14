@@ -1,0 +1,300 @@
+Program.Sub.ScreenSU.Start
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+
+Variable.UDT.uInv.Define("PART",String,PART)
+Variable.UDT.uInv.Define("LOC",String,LOCATION)
+Variable.UDT.uInv.Define("DESCRIPTION",String,DESCRIPTION)
+Variable.UDT.uInv.Define("QTY_ONHD_ONWO",Float,QTY_ONHD_ONWO)
+Variable.UDT.uInv.Define("QTY_REORDER",Float,QTY_REORDER)
+Variable.UDT.uInv.Define("QTY_ORDER",Float,QTY_ORDER)
+Variable.UDT.uInv.Define("QTY_REQ",Float)
+Variable.UDT.uInv.Define("Forecast",Float)
+Variable.UDT.uInv.Define("SEQUENCE_BOM",String)
+
+Variable.uGlobal.uInv.Declare("uInv")
+Variable.UDT.uOrderLst.Define("Order_NO",String,ORDER_NO)
+Variable.UDT.uOrderLst.Define("RECORD_NO",String,RECORD_NO)
+Variable.UDT.uOrderLst.Define("QTY_BO",Float,QTY_BO)
+Variable.UDT.uOrderLst.Define("DATE_ITEM_PROM",Date,DATE_ITEM_PROM)
+Variable.UDT.uOrderLst.Define("FLAG_USE_MQD",String,FLAG_USE_MQD)
+Variable.UDT.uOrderLst.Define("QTY_OPEN",Float,QTY_OPEN)
+Variable.UDT.uOrderLst.Define("DATE_DUE",Date,DATE_DUE)
+Variable.UDT.uOrderLst.Define("Qty_Fore",Float)
+Variable.UDT.uOrderLst.Define("PART",String,PART)
+Variable.UDT.uOrderLst.Define("LOCATION",String,LOCATION)
+
+Variable.uGlobal.uOrderLst.Declare("uOrderLst")
+Variable.UDT.uReq.Define("PART",String,PART)
+Variable.UDT.uReq.Define("LOCATION",String,LOCATION)
+Variable.UDT.uReq.Define("BO_QTY",String,BO_QTY)
+Variable.UDT.uReq.Define("ONHAND_QTY",Float,QTY_ONHAND)
+
+Variable.uGlobal.uReq.Declare("uReq")
+Variable.UDT.uTotalReq.Define("PART",String)
+Variable.UDT.uTotalReq.Define("LOC",String)
+Variable.UDT.uTotalReq.Define("QTY_REQ",Float)
+Variable.UDT.uTotalReq.Define("DATE_REQ",Date)
+
+Variable.uGlobal.uOrderLstComp.Declare("uOrderLst")
+
+Variable.UDT.uInvComponent.Define("PART",String,PART)
+Variable.uGlobal.uInvComponent.Declare("uInvComponent")
+Variable.uGlobal.uTotalReq.Declare("uTotalReq")
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'RRC
+'LastMod:03/01/17 GSS 2016.2
+'LastMod:06/28/17 GSS 2016.2 - AGV
+'LastMod:10/26/17 GSS 2016.2 - RRC
+'LastMod:02/28/18 GSS 2016.2 - RRC (PSQL v12 fix)
+'LastMod:08/14/19 GSS 2018.1 - RRC Considering QTY_ORDER / QTY_REORDER 
+
+V.Local.iC.Declare(Long)
+V.Local.iC2.Declare(Long)
+V.Local.iCa.Declare(Long,0)
+V.Local.sCa.Declare(String)
+V.Local.iCa2.Declare(Long)
+V.Local.sSqlInventory.Declare(String)
+V.Local.sSqlReq.Declare(String)
+V.Local.sSqlOrderLn.Declare(String)
+V.Local.sSqlInvComponent.Declare(String)
+V.Local.sSqlForHd.Declare(String)
+V.Local.sSqlForLn.Declare(String)
+V.Local.sSql2.Declare(String)
+V.Local.fSumQty.Declare(Float)
+V.Local.fAvilQty.Declare(Float)
+V.Local.fQty_Fore.Declare(Float)
+V.Local.sDate.Declare(String)
+V.Local.dDate.Declare(Date)
+V.Local.sLine.Declare(String)
+V.Local.sLine2.Declare(String)
+V.Local.iLine2.Declare(Long)
+V.Local.fQty_BORecurr.Declare(Float)
+V.Local.dRequired.Declare(Date)
+V.Local.dMRequired.Declare(Date)
+V.Local.dOneYear.Declare(Date)
+V.Local.bDateV.Declare(Boolean)
+V.Local.iCR.Declare(Long,0)
+V.Local.dDateZero.Declare(Date)
+V.Local.sFile.Declare(String)
+V.Local.bFileExists.Declare(Boolean)
+V.Local.sSqlRtrVerif.Declare(String)
+V.Local.fQty_Reorder.Declare(Float)
+V.Local.bTable.Declare(Boolean)
+V.Local.sFile2.Declare(String)
+V.Local.fBalance.Declare(Float)
+V.Local.fBalanceT.Declare(Float)
+V.Local.fTemp.Declare(Float)
+V.Local.fDif.Declare(Float)
+V.Local.fQtyDiv.Declare(Float)
+V.Local.iFlag.Declare(Long,0)
+
+
+
+F.Intrinsic.String.Build("{0}\FCROUTERSMISSED_5635_{1}.txt",V.Caller.FilesDir,V.Caller.CompanyCode,V.Local.sFile)
+F.Intrinsic.File.Exists(V.Local.sFile,V.Local.bFileExists)
+F.Intrinsic.Control.If(V.Local.bFileExists,=,True)
+	F.Intrinsic.File.DeleteFile(V.Local.sFile)
+F.Intrinsic.Control.EndIf
+F.Intrinsic.File.String2File(V.Local.sFile,"Routers Missed List:")
+
+F.Intrinsic.Date.DateSerial(1900,1,1,V.Local.dDateZero)
+F.Intrinsic.String.Format(V.Ambient.Date,"yyyymmdd",V.Local.sDate)
+F.Intrinsic.Date.DateAdd("YYYY",5,V.Ambient.Date,V.Local.dOneYear)
+V.Local.dDate.Set(V.Ambient.Date)
+V.Local.sSQLInventory.Set("Select VIM.PART,VIM.LOCATION,VIM.DESCRIPTION, VIM.QTY_ONHAND+VIM.QTY_ONORDER_WO QTY_ONHD_ONWO, VIM.QTY_REORDER, VIM.QTY_ORDER FROM  V_Inventory_MSTR VIM")
+
+V.Local.sSqlReq.Set("Select VOL.PART, VOL.Location, Sum(VOL.QTY_BO) BO_QTY, VIM.QTY_ONHAND+VIM.QTY_ONORDER_WO QTY_ONHAND From V_ORDER_LINES VOL LEFT OUTER JOIN V_INVENTORY_MSTR VIM ON VIM.PART=VOL.PART AND VIM.LOCATION=VOL.LOCATION  Where VOL.QTY_BO>0  Group By VOL.Part, VOL.Location, QTY_Onhand")
+
+V.Local.sSqlOrderLn.Set("Select  VOL.PART, VOL.LOCATION, VOL.ORDER_NO, VOL.RECORD_NO, VOL.QTY_BO, VOL.DATE_ITEM_PROM, VOL.FLAG_USE_MQD, VOS.QTY_OPEN, VOS.DATE_DUE FROM V_ORDER_LINES VOL FULL OUTER JOIN V_OE_SHIP_SCHED VOS ON VOL.ORDER_NO=VOS.ORDER_NO AND VOL.RECORD_NO=VOS.ORDER_LINE WHERE (VOS.DATE_DUE <= Cast(DateAdd(Year,1,CurDate()) As Date) AND VOS.DATE_DUE <> '1900-01-01' OR VOS.DATE_DUE IS NULL) ORDER BY VOL.PART,VOL.LOCATION, VOL.DATE_ITEM_PROM, VOS.DATE_DUE;")
+
+V.Local.sSqlInvComponent.Set("Select DISTINCT VOL.PART from V_ORDER_LINES VOL LEFT OUTER JOIN BOM_MSTR BM ON BM.PART=VOL.PART WHERE BM.SEQUENCE_BOM<>'0000' order by VOL.part")
+
+V.Local.sSqlForHd.Set("Select * From FORECAST_IMPORT_HDR")
+V.Local.sSqlForLn.Set("Select * From FORECAST_IMPORT_LINE")
+
+'Create/Open Connection
+F.ODBC.Connection!Conx.OpenConnection(V.Ambient.PDSN,V.Ambient.PUser,V.Ambient.PPass,3600)
+F.ODBC.Connection!Conx.OpenLocalRecordsetRO("rstInvLoad",V.Local.sSQLInventory)
+F.Intrinsic.Variable.LoadUDTFromRecordset("Conx","rstInvLoad","uglobal.uInv",False,100000)
+F.ODBC.Conx!rstInvLoad.Close
+
+F.ODBC.Connection!Conx.OpenLocalRecordsetRO("rstInvComp",V.Local.sSqlInvComponent)
+F.Intrinsic.Variable.LoadUDTFromRecordset("Conx","rstInvComp","uglobal.uInvComponent",False,100000)
+F.ODBC.Conx!rstInvComp.Close
+
+F.ODBC.Connection!Conx.OpenLocalRecordsetRO("rstReqLoad",V.Local.sSQLReq)
+F.Intrinsic.Variable.LoadUDTFromRecordset("Conx","rstReqLoad","uglobal.uReq",False,100000)
+F.ODBC.Conx!rstReqLoad.Close
+
+F.ODBC.Connection!Conx.OpenLocalRecordsetRO("rstOrdLnLoad",V.Local.sSQLOrderLn)
+F.Intrinsic.Variable.LoadUDTFromRecordset("Conx","rstOrdLnLoad","uglobal.uOrderLst",False,100000)
+F.ODBC.Conx!rstOrdLnLoad.Close
+
+'Remove records where BO = 0
+F.Intrinsic.Variable.UDTFlagAll(V.uGlobal.uOrderLst)
+F.Intrinsic.Variable.UDTMultiUnFlag(V.uGlobal.uOrderLst!QTY_BO,">::0")
+F.Intrinsic.Variable.UDTDeleteFlagged(V.uGlobal.uOrderLst)
+
+F.Intrinsic.Variable.UDTMultiFlag(V.uGlobal.uOrderLst!FLAG_USE_MQD,"Y",V.uGlobal.uOrderLst!QTY_OPEN,0)
+F.Intrinsic.Variable.UDTDeleteFlagged(V.uGlobal.uOrderLst)
+
+
+'Calculate Requirements
+F.Intrinsic.Control.For(V.Local.iC,0,V.uGlobal.uReq.UBound,1)
+	F.Intrinsic.Variable.UDTMultiSeek(V.uGlobal.uInv!PART,V.uGlobal.uReq(V.Local.iC)!PART,V.uGlobal.uInv!LOC,V.uGlobal.uReq(V.Local.iC)!LOCATION,V.Local.sLine)
+	F.Intrinsic.Control.If(V.Local.sLine,<>,"")
+		F.Intrinsic.String.Split(V.Local.sLine,"*!*",V.Local.sLine)
+		V.uGlobal.uInv(V.Local.sLine(0))!QTY_REQ.Set(V.uGlobal.uReq(V.Local.iC)!BO_QTY)
+		F.Intrinsic.Math.Sub(V.uGlobal.uInv(V.Local.sLine(0))!QTY_REQ,V.uGlobal.uInv(V.Local.sLine(0))!QTY_ONHD_ONWO,V.uGlobal.uInv(V.Local.sLine(0))!Forecast)
+		F.Intrinsic.Math.Add(V.uGlobal.uInv(V.Local.sLine(0))!QTY_REORDER,V.uGlobal.uInv(V.Local.sLine(0))!Forecast,V.uGlobal.uInv(V.Local.sLine(0))!Forecast)
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Next(V.Local.iC)
+
+'F.Intrinsic.Debug.Stop
+
+'Remove records where Forecast <=0
+F.Intrinsic.Variable.UDTFlagAll(V.uGlobal.uInv)
+F.Intrinsic.Variable.UDTMultiUnFlag(V.uGlobal.uInv!Forecast,">::0")
+F.Intrinsic.Variable.UDTDeleteFlagged(V.uGlobal.uInv)
+V.uGlobal.uTotalReq.RedimPreserve(0,0)
+
+
+
+F.Intrinsic.Control.For(V.Local.iC,0,V.uGlobal.uOrderLst.UBound,1)
+	F.Intrinsic.Control.If(V.uGlobal.uOrderLst(V.Local.iC)!FLAG_USE_MQD,=,"Y")
+		F.Intrinsic.Control.If(V.uGlobal.uOrderLst(V.Local.iC)!DATE_DUE,=,V.Local.dDateZero)
+			V.uGlobal.uOrderLst(V.Local.iC)!DATE_ITEM_PROM.Set(V.Local.dOneYear)
+		F.Intrinsic.Control.Else
+			V.uGlobal.uOrderLst(V.Local.iC)!DATE_ITEM_PROM.Set(V.uGlobal.uOrderLst(V.Local.iC)!DATE_DUE)
+		F.Intrinsic.Control.Endif
+	F.Intrinsic.Control.Else
+		V.uGlobal.uOrderLst(V.Local.iC)!QTY_OPEN.Set(V.uGlobal.uOrderLst(V.Local.iC)!QTY_BO)
+		F.Intrinsic.Control.If(V.uGlobal.uOrderLst(V.Local.iC)!DATE_ITEM_PROM,=,V.Local.dDateZero)
+			V.uGlobal.uOrderLst(V.Local.iC)!DATE_ITEM_PROM.Set(V.Local.dOneYear)
+		F.Intrinsic.Control.Endif
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Next(V.Local.iC)
+
+'F.Intrinsic.Debug.Stop
+
+F.Intrinsic.Variable.UDTMultiQuickSort(V.uGlobal.uOrderLst!PART,0,V.uGlobal.uOrderLst!LOCATION,0,V.uGlobal.uOrderLst!DATE_ITEM_PROM,0,V.uGlobal.uOrderLst!Order_NO,0,V.uGlobal.uOrderLst!RECORD_NO,0)
+
+
+F.Intrinsic.Control.For(V.Local.iC,0,V.uGlobal.uInv.UBound,1)
+	V.Local.fBalance.Set(0)
+	V.Local.fDif.Set(0)
+	V.Local.iFlag.Set(0)
+	F.Intrinsic.Variable.UDTMultiSeek(V.uGlobal.uOrderLst!PART,V.uGlobal.uInv(V.Local.iC)!PART,V.uGlobal.uOrderLst!LOCATION,V.uGlobal.uInv(V.Local.iC)!LOC,V.Local.sLine)
+	F.Intrinsic.Control.If(V.Local.sLine,<>,"")
+		F.Intrinsic.String.Split(V.Local.sLine,"*!*",V.Local.sLine)
+		F.Intrinsic.Control.For(V.Local.iC2,0,V.Local.sLine.UBound,1)
+			V.Local.fDif.Set(0)
+			V.Local.fQtyDiv.Set(0)
+			F.Intrinsic.Control.If(V.Local.iFlag,=,0)
+				V.Local.fBalance.Set(V.uGlobal.uInv(V.Local.iC)!QTY_ONHD_ONWO)
+				V.Local.iFlag.Set(1)
+			F.Intrinsic.Control.EndIf
+			F.Intrinsic.Math.Sub(V.Local.fBalance,V.uGlobal.uOrderLst(V.Local.sLine(V.Local.iC2))!QTY_OPEN,V.uGlobal.uInv(V.Local.iC)!QTY_REORDER,V.Local.fBalance)
+			F.Intrinsic.Control.If(V.Local.fBalance,<,0)
+				F.Intrinsic.Math.Abs(V.Local.fBalance,V.Local.fBalanceT)
+				F.Intrinsic.Control.If(V.uGlobal.uInv(V.Local.iC)!QTY_ORDER,=,0)
+					V.Local.fDif.Set(V.Local.fBalanceT)
+					V.Local.fBalance.Set(0)
+				F.Intrinsic.Control.Else
+					F.Intrinsic.Math.Div(V.Local.fBalanceT,V.uGlobal.uInv(V.Local.iC)!QTY_ORDER,V.Local.fQtyDiv)
+					F.Intrinsic.Math.Ceiling(V.Local.fQtyDiv,V.Local.fQtyDiv)
+					F.Intrinsic.Math.Mult(V.Local.fQtyDiv,V.uGlobal.uInv(V.Local.iC)!QTY_ORDER,V.Local.fDif)
+					F.Intrinsic.Math.Add(V.Local.fDif,V.Local.fBalance,V.Local.fBalance)
+				F.Intrinsic.Control.EndIf
+				V.uGlobal.uTotalReq.RedimPreserve(0,V.Local.iCR)
+				V.uGlobal.uTotalReq(V.Local.iCR)!PART.Set(V.uGlobal.uInv(V.Local.iC)!PART)
+				V.uGlobal.uTotalReq(V.Local.iCR)!LOC.Set(V.uGlobal.uInv(V.Local.iC)!LOC)
+				V.uGlobal.uTotalReq(V.Local.iCR)!QTY_REQ.Set(V.Local.fDif)
+				V.uGlobal.uTotalReq(V.Local.iCR)!DATE_REQ.Set(V.uGlobal.uOrderLst(V.Local.sLine(V.Local.iC2))!DATE_ITEM_PROM)
+				F.Intrinsic.Math.Add(V.Local.iCR,1,V.Local.iCR)
+			F.Intrinsic.Control.EndIf
+			F.Intrinsic.Math.Add(V.Local.fBalance,V.uGlobal.uInv(V.Local.iC)!QTY_REORDER,V.Local.fBalance)
+		F.Intrinsic.Control.Next(V.Local.iC2)
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Next(V.Local.iC)
+
+
+'Sort Total Req
+F.Intrinsic.Variable.UDTMultiQuickSort(V.uGlobal.uTotalReq!PART,0,V.uGlobal.uTotalReq!LOC,0,V.uGlobal.uTotalReq!DATE_REQ,0)
+F.Intrinsic.Control.For(V.Local.iC,0,V.uGlobal.uInv.UBound,1)
+	F.Intrinsic.Variable.UDTMultiSeek(V.uGlobal.uInvComponent!PART,V.uGlobal.uInv(V.Local.iC)!PART,V.Local.sLine)
+	F.Intrinsic.Control.If(V.Local.sLine,=,"")
+		F.Intrinsic.Math.Add(V.Local.iC,1,V.Local.iCa)
+		V.Local.fAvilQty.Set(0)
+		V.Local.fQty_Fore.Set(0)
+		V.Local.fSumQty.Set(0)
+		V.Local.fQty_BORecurr.Set(0)
+		F.Intrinsic.String.Build("Select Router From V_ROUTER_HEADER Where Router='{0}'",V.uGlobal.uInv(V.Local.iC)!PART,V.Local.sSqlRtrVerif)
+		F.ODBC.Connection!Conx.OpenLocalRecordsetRO("rstCheckRtr",V.Local.sSqlRtrVerif)
+		F.Intrinsic.Control.If(V.ODBC.Conx!rstCheckRtr.EOF,=,False)
+			'Create Records for Forecast Header
+			F.ODBC.Connection!Conx.OpenLocalRecordsetRW("rstForeHdSave",V.Local.sSqlForHd)
+			F.ODBC.Conx!rstForeHdSave.AddNew
+			F.ODBC.Conx!rstForeHdSave.Set!KEY_DATE(V.Local.sDate)
+			F.Intrinsic.String.LPad(V.Local.iCa,"0",8,V.Local.sCa)
+			F.ODBC.Conx!rstForeHdSave.Set!KEY_TIME(V.Local.sCa)
+			F.ODBC.Conx!rstForeHdSave.Set!PART(V.uGlobal.uInv(V.Local.iC)!PART)
+			F.ODBC.Conx!rstForeHdSave.Set!LOC(V.uGlobal.uInv(V.Local.iC)!LOC)
+			F.ODBC.Conx!rstForeHdSave.Set!DESCRIPTION(V.uGlobal.uInv(V.Local.iC)!DESCRIPTION)
+			F.ODBC.Conx!rstForeHdSave.Set!START_DATE(V.Local.dDate)
+			F.ODBC.Conx!rstForeHdSave.Set!INV_SOURCE("M")
+			F.ODBC.Conx!rstForeHdSave.Set!IMPORT_SOURCE("M")
+			F.ODBC.Conx!rstForeHdSave.Update
+			F.ODBC.Conx!rstForeHdSave.Close
+			V.Local.iCa2.Set(0)
+			F.Intrinsic.Variable.UDTMultiSeek(V.uGlobal.uTotalReq!PART,V.uGlobal.uInv(V.Local.iC)!PART,V.uGlobal.uTotalReq!LOC,V.uGlobal.uInv(V.Local.iC)!LOC,V.Local.sLine2)
+			F.Intrinsic.Control.If(V.Local.sLine2,<>,"")
+				F.Intrinsic.String.Split(V.Local.sLine2,"*!*",V.Local.sLine2)
+
+				F.Intrinsic.Control.For(V.Local.iC2,0,V.Local.sLine2.UBound,1)
+					V.Local.iLine2.Set(V.Local.sLine2(V.Local.iC2))
+					F.Intrinsic.Math.Add(V.Local.iCa2,1,V.Local.iCa2)
+					F.ODBC.Connection!Conx.OpenLocalRecordsetRW("rstForeLnSave",V.Local.sSqlForLn)
+					F.ODBC.Conx!rstForeLnSave.AddNew
+					F.ODBC.Conx!rstForeLnSave.Set!KEY_DATE(V.Local.sDate)
+					F.Intrinsic.String.LPad(V.Local.iCa,"0",8,V.Local.sCa)
+					F.ODBC.Conx!rstForeLnSave.Set!KEY_TIME(V.Local.sCa)
+					F.ODBC.Conx!rstForeLnSave.Set!KEY_SEQ(V.Local.iC2)
+					F.ODBC.Conx!rstForeLnSave.Set!REQUIRED(V.uGlobal.uTotalReq(V.Local.iLine2)!DATE_REQ)
+					F.ODBC.Conx!rstForeLnSave.Set!QUANTITY(V.uGlobal.uTotalReq(V.Local.iLine2)!QTY_REQ)
+					F.ODBC.Conx!rstForeLnSave.Set!TYPE("1")
+					F.ODBC.Conx!rstForeLnSave.Update
+					F.ODBC.Conx!rstForeLnSave.Close
+				F.Intrinsic.Control.Next(V.Local.iC2)
+			F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.Else
+			F.Intrinsic.File.Append2FileNewLine(V.Local.sFile,V.uGlobal.uInv(V.Local.iC)!PART)
+		F.Intrinsic.Control.EndIf
+		F.ODBC.Conx!rstCheckRtr.Close
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Next(V.Local.iC)
+
+'Save Component Parts in GAB_5635_ForeLd_TMP table
+F.ODBC.Connection!Conx.TableExists("GAB_5635_ForeLd_TMP",V.Local.bTable)
+F.Intrinsic.Control.If(V.Local.bTable,=,False)
+	F.ODBC.Connection!Conx.Execute("CREATE TABLE GAB_5635_ForeLd_TMP(ID IDENTITY DEFAULT '0', PART CHAR(30),  UNIQUE (ID)); ")
+F.Intrinsic.Control.EndIf
+
+F.ODBC.Connection!Conx.Execute("DELETE FROM GAB_5635_ForeLd_TMP")
+V.Local.sSql2.Set("Select Part From GAB_5635_ForeLd_TMP")
+F.ODBC.Connection!Conx.OpenLocalRecordsetRW("rstSaveCom",V.Local.sSql2)
+F.Intrinsic.Variable.SaveUDTToRecordSet("Conx","rstSaveCom","V.uGlobal.uInvComponent")
+F.ODBC.Conx!rstSaveCom.Close
+
+'Close the Connection
+F.ODBC.Connection!Conx.Close
+Program.Sub.Main.End
+
+Program.Sub.Comments.Start
+${$0$}$GAB_CP_ForeLdBegMonth$}$RR$}$4/8/2014$}$False
+${$3$}$0$}$$}$0$}$-1$}$$}$12:00:00 AM$}$Fore at the beg of the month (group records)
+Program.Sub.Comments.End
